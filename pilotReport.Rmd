@@ -10,6 +10,7 @@ output:
 #### Pilot: Gustav Nilsonne
 #### Start date: 03/29/2017
 #### End date: 04/06/2017
+#### Restart date after author contact: 05/13/2017
 
 -------
 
@@ -42,13 +43,17 @@ library(CODreports) # custom report functions
 ## Step 2: Load data
 
 ```{r}
-data <- read_excel("data/data.xlsx", sheet = 2)
+data_raw <- read_excel("data/tri_final.xlsx")
+data <- data_raw[-1, ] # Remove column names from data
+names(data) <- data_raw[1, ] # Put column names back in as column names
 ```
 
 ## Step 3: Tidy data
 
 ```{r}
 data$scorefirstlook <- as.numeric(data$scorefirstlook) # Change from character to numeric - gives warning because NAs are introduced, but that is as it should be
+data$RT <- as.numeric(data$RT)
+data$percentLTcongruent <- as.numeric(data$percentLTcongruent)
 data <- data[data$pronounced == "no", ] # Exclude trials with pronounced words, see footnote on page 54
 ```
 
@@ -59,16 +64,14 @@ data <- data[data$pronounced == "no", ] # Exclude trials with pronounced words, 
 For each participant, scores were calculated and scaled, and weights were determined for each participant depending on the number of trials with a recorded response (section 2.2, page 55):
 
 > Two individual accuracy measures were computed based on infants’ left and right looks (hence
-excluding the other looks): initial accuracy, defined as proportion of first fixations to correct side, and overall accuracy, defined as proportion looking time to correct side. Both scores were scaled
-such that they ran from -1, corresponding to 100% incorrect anticipations, to +1, corresponding to 100% correct anticipations, with 0 representing performance at chance level. To test whether infants’ mean accuracy scores were significantly above chance, we ran onesided t-tests. Given that the number of analyzable test trials varied widely across infants (mean = 14.9; range = 4–27), both because the number of trials was variable and because infants did not necessarily show at least one left or right look in all trials, we used a
-weighted version. In this version, the contribution of individual infants’ accuracy scores to the t-statistic is proportional to their number of anticipated trials.
+excluding the other looks): initial accuracy, defined as proportion of first fixations to correct side, and overall accuracy, defined as proportion looking time to correct side. Both scores were scaled such that they ran from -1, corresponding to 100% incorrect anticipations, to +1, corresponding to 100% correct anticipations, with 0 representing performance at chance level. To test whether infants’ mean accuracy scores were significantly above chance, we ran onesided t-tests. Given that the number of analyzable test trials varied widely across infants (mean = 14.9; range = 4–27), both because the number of trials was variable and because infants did not necessarily show at least one left or right look in all trials, we used a weighted version. In this version, the contribution of individual infants’ accuracy scores to the t-statistic is proportional to their number of anticipated trials.
 
 
 ```{r}
 # Determine initial accuracy for each individual, training data
 # Initial accuracy is helpfully given by the "scorefirstlook" variable, which I have used as it is, without attempting to reconstruct it from raw data
 for (i in unique(data$subj)){ # Loop over participants
-  data_subj <- data[data$subj == i & data$phase == "training", ]
+  data_subj <- data[data$subj == i & data$phase == "train", ]
   initial_accuracy <- sum(data_subj$scorefirstlook, na.rm = T)/length(data_subj$scorefirstlook[!is.na(data_subj$scorefirstlook)]) # Find mean accuracy across trials for each participant
   if (!exists("data_initial_training")){ # Make data frame
     data_initial_training <- data.frame(subj = i, initial_accuracy = initial_accuracy, n_obs = length(data_subj$scorefirstlook[!is.na(data_subj$scorefirstlook)]))
@@ -76,8 +79,7 @@ for (i in unique(data$subj)){ # Loop over participants
     data_initial_training <- rbind(data_initial_training, data.frame(subj = i, initial_accuracy = initial_accuracy, n_obs = length(data_subj$scorefirstlook[!is.na(data_subj$scorefirstlook)])))
   }
 }
-
-# Scale initial accuracy, training phase
+# Scale initial accuracy
 data_initial_training$initial_accuracy_scaled <- data_initial_training$initial_accuracy * 2 - 1
 
 
@@ -91,38 +93,43 @@ for (i in unique(data$subj)){
     data_initial_test <- rbind(data_initial_test, data.frame(subj = i, initial_accuracy = initial_accuracy, n_obs = length(data_subj$scorefirstlook[!is.na(data_subj$scorefirstlook)])))
   }
 }
-
-# Scale initial accuracy, test phase
+# Scale initial accuracy
 data_initial_test$initial_accuracy_scaled <- data_initial_test$initial_accuracy * 2 - 1
 
 
 # Determine overall accuracy for each individual, training data
 # First find proportion of looks to correct side
-data_looks <- data[, c(14:63)] # Make separate data frame with only the looking data
+data_looks <- data[, c(32:81)] # Make separate data frame with only the looking data
+data_looks <- sapply(data_looks, as.numeric)
 data$exclude_trial = apply(data_looks, 1, function(x) all(x == 0 )) # Find trials with neither left nor right looks, exclude later
-data$accuracy <- rowSums(data_looks)/50 # Summation is performed in this step and the resulting scores will be scaled appropriately
+data$accuracy <- rowSums(data_looks)/50 # Will not be used
 
 for (i in unique(data$subj)){
-  data_subj <- data[data$subj == i & data$phase == "training" & data$exclude_trial == F, , ]
-  overall_accuracy <- mean(data_subj$accuracy)
+  data_subj <- data[data$subj == i & data$phase == "train" & data$exclude_trial == F, , ]
+  overall_accuracy <- mean(data_subj$accuracy) # Do not use
+  overall_percentLTcongruent <- mean(data_subj$percentLTcongruent)
   if (!exists("data_overall_training")){
-    data_overall_training <- data.frame(subj = i, overall_accuracy = overall_accuracy, n_obs = length(data_subj$accuracy[!is.na(data_subj$accuracy)]))
+    data_overall_training <- data.frame(subj = i, overall_accuracy = overall_accuracy, overall_percentLTcongruent = overall_percentLTcongruent, n_obs = length(data_subj$accuracy[!is.na(data_subj$accuracy)]))
   } else {
-    data_overall_training <- rbind(data_overall_training, data.frame(subj = i, overall_accuracy = overall_accuracy, n_obs = length(data_subj$accuracy[!is.na(data_subj$accuracy)])))
+    data_overall_training <- rbind(data_overall_training, data.frame(subj = i, overall_accuracy = overall_accuracy, overall_percentLTcongruent = overall_percentLTcongruent, n_obs = length(data_subj$accuracy[!is.na(data_subj$accuracy)])))
   }
 }
+# Scale overall accuracy
+data_overall_training$overall_percentLTcongruent <- (data_overall_training$overall_percentLTcongruent - 50)/50 
 
 # Determine overall accuracy for each individual, test data
 for (i in unique(data$subj)){
   data_subj <- data[data$subj == i & data$phase == "test" & data$exclude_trial == F, ]
-  overall_accuracy <- mean(data_subj$accuracy)
+  overall_accuracy <- mean(data_subj$accuracy) # Do not use
+  overall_percentLTcongruent <- mean(data_subj$percentLTcongruent)
   if (!exists("data_overall_test")){
-    data_overall_test <- data.frame(subj = i, overall_accuracy = overall_accuracy, n_obs = length(data_subj$accuracy[!is.na(data_subj$accuracy)]))
+    data_overall_test <- data.frame(subj = i, overall_accuracy = overall_accuracy, overall_percentLTcongruent = overall_percentLTcongruent, n_obs = length(data_subj$accuracy[!is.na(data_subj$accuracy)]))
   } else {
-    data_overall_test <- rbind(data_overall_test, data.frame(subj = i, overall_accuracy = overall_accuracy, n_obs = length(data_subj$accuracy[!is.na(data_subj$accuracy)])))
+    data_overall_test <- rbind(data_overall_test, data.frame(subj = i, overall_accuracy = overall_accuracy, overall_percentLTcongruent = overall_percentLTcongruent, n_obs = length(data_subj$accuracy[!is.na(data_subj$accuracy)])))
   }
 }
-
+# Scale overall accuracy
+data_overall_test$overall_percentLTcongruent <- (data_overall_test$overall_percentLTcongruent - 50)/50 
 
 # Find duration of first look
 looks <- apply(data_looks, 1, rle)
@@ -141,7 +148,7 @@ data <- cbind(data, firstlookdurations)
 
 ```
 
-
+NB: I have calculated overall accuracy as "proportion looking time to correct side" out of the time the participant looked to either side, rather than out of the whole time the participant was looking. 
 
 ### Descriptive statistics
 
@@ -151,7 +158,7 @@ Reported:
 > 81%
 
 ```{r}
-v1 <- round(sum(data[data$phase == "training", ]$attempted == "yes")/length(data[data$phase == "training", ]$attempted), 2)
+v1 <- sum(data[data$phase == "train", ]$attempted == "yes")/length(data[data$phase == "train", ]$attempted)
 compareValues(reportedValue = 0.81, obtainedValue = v1)
 ```
 
@@ -161,7 +168,7 @@ Reported:
 > 83%
 
 ```{r}
-v2 <- round(sum(data[data$phase == "test", ]$attempted == "yes")/length(data[data$phase == "test", ]$attempted), 2)
+v2 <- sum(data[data$phase == "test", ]$attempted == "yes")/length(data[data$phase == "test", ]$attempted)
 compareValues(reportedValue = 0.83, obtainedValue = v2)
 ```
 
@@ -171,15 +178,15 @@ Reported (referring to test phase):
 > The mean latency of the first look was 625 ms (SD: 141 ms), and its mean duration 819 ms (SD: 238 ms).
 
 ```{r}
-v3 <- round(mean(data[data$phase == "test" & data$exclude_trial == F, ]$RT), 0) # mean latency
-v4 <- round(sd(data[data$phase == "test" & data$exclude_trial == F, ]$RT), 0) # sd latency
-v5 <- round(mean(data[data$phase == "test" & data$exclude_trial == F, ]$firstlookdurations), 0) # mean duration
-v6 <- round(sd(data[data$phase == "test" & data$exclude_trial == F, ]$firstlookdurations), 0) # sd duration
+v3 <- mean(data[data$phase == "test" & data$exclude_trial == F, ]$RT) # mean latency
+v4 <- sd(data[data$phase == "test" & data$exclude_trial == F, ]$RT) # sd latency
+v5 <- mean(data[data$phase == "test" & data$exclude_trial == F, ]$firstlookdurations) # mean duration
+v6 <- sd(data[data$phase == "test" & data$exclude_trial == F, ]$firstlookdurations) # sd duration
 
 compareValues(reportedValue = 625, obtainedValue = v3) # mean latency
 compareValues(reportedValue = 141, obtainedValue = v4) # sd latency
-compareValues(reportedValue = 819, obtainedValue = v3) # mean duration
-compareValues(reportedValue = 238, obtainedValue = v4) # sd duration
+compareValues(reportedValue = 819, obtainedValue = v5) # mean duration
+compareValues(reportedValue = 238, obtainedValue = v6) # sd duration
 ```
 
 
@@ -193,21 +200,21 @@ Reported:
 ```{r}
 # Initial accuracy, training
 ttest1 <- t.test(data_initial_training$initial_accuracy_scaled, weights = data_initial_training$n_obs, alternative = "greater")
-se1 <- round(abs((ttest1$conf.int[1] - ttest1$estimate) / 1.96), 2)
+se1 <- abs((ttest1$conf.int[1] - ttest1$estimate) / 1.96)
 ttest1$statistic
 ttest1$p.value
 
-compareValues(reportedValue = -0.02, obtainedValue = round(ttest1$estimate, 2)) # mean
+compareValues(reportedValue = -0.02, obtainedValue = ttest1$estimate) # mean
 compareValues(reportedValue = 0.03, obtainedValue = se1) # SE
 compareValues(reportedValue = 30, obtainedValue = ttest1$parameter) # df
 
 # Overall accuracy, training
-ttest2 <- t.test(data_overall_training$overall_accuracy, weights = data_overall_training$n_obs, alternative = "greater")
+ttest2 <- t.test(data_overall_training$overall_percentLTcongruent, weights = data_overall_training$n_obs, alternative = "greater")
 se2 <- round(abs((ttest2$conf.int[1] - ttest2$estimate) / 1.96), 2)
 ttest2$statistic
 ttest2$p.value
 
-compareValues(reportedValue = -0.002, obtainedValue = round(ttest2$estimate, 3)) # mean
+compareValues(reportedValue = -0.002, obtainedValue = ttest2$estimate) # mean
 compareValues(reportedValue = 0.03, obtainedValue = se2) # SE
 compareValues(reportedValue = 30, obtainedValue = ttest2$parameter) # df
 
@@ -221,26 +228,26 @@ Reported:
 ```{r}
 # Initial accuracy, test
 ttest3 <- t.test(data_initial_test$initial_accuracy_scaled, weights = data_initial_test$n_obs, alternative = "greater")
-se3 <- round(abs((ttest3$conf.int[1] - ttest3$estimate) / 1.96), 2)
+se3 <- abs((ttest3$conf.int[1] - ttest3$estimate) / 1.96)
 
-compareValues(reportedValue = 0.12, obtainedValue = round(ttest3$estimate, 2)) # mean
+compareValues(reportedValue = 0.12, obtainedValue = ttest3$estimate) # mean
 compareValues(reportedValue = 0.04, obtainedValue = se3) # SE
 compareValues(reportedValue = 30, obtainedValue = ttest3$parameter) # df
 compareValues(reportedValue = 3.25, obtainedValue = ttest3$statistic) # t
-compareValues(reportedValue = 0.0014, obtainedValue = round(ttest3$p.value, 4), isP = T) # p
+compareValues(reportedValue = 0.0014, obtainedValue = ttest3$p.value, isP = T) # p
 
 # Overall accuracy, test
-ttest4 <- t.test(data_overall_test$overall_accuracy, weights = data_overall_test$n_obs, alternative = "greater")
-se4 <- round(abs((ttest4$conf.int[1] - ttest4$estimate) / 1.96), 2)
+ttest4 <- t.test(data_overall_test$overall_percentLTcongruent, weights = data_overall_test$n_obs, alternative = "greater")
+se4 <- abs((ttest4$conf.int[1] - ttest4$estimate) / 1.96)
 
-compareValues(reportedValue = 0.06, obtainedValue = round(ttest4$estimate, 2)) # mean
+compareValues(reportedValue = 0.06, obtainedValue = ttest4$estimate) # mean
 compareValues(reportedValue = 0.03, obtainedValue = se4) # SE
 compareValues(reportedValue = 30, obtainedValue = ttest4$parameter) # df
 compareValues(reportedValue = 1.69, obtainedValue = ttest4$statistic) # t
-compareValues(reportedValue = 0.050, obtainedValue = round(ttest4$p.value, 3), isP = T) # p
+compareValues(reportedValue = 0.050, obtainedValue = ttest4$p.value, isP = T) # p
 ```
 
-Note: The reported p-value of 0.050 was interpreted as statistically significant, but the recalculated p-value of 0.091 was not statistically significant at the 0.05 threshold. I will therefore code this discrepancy as a decision error, even though the original p value was not < 0.05.
+Note: The reported p-value of 0.050 was interpreted as statistically significant, but the recalculated p-value was not statistically significant at the 0.05 threshold. I will therefore code this discrepancy as a decision error, even though the original p value was not < 0.05.
 
 
 ## Step 5: Conclusion
@@ -250,11 +257,11 @@ codReport(Report_Type = 'pilot',
           Article_ID = 'UYYED', 
           Insufficient_Information_Errors = 0,
           Decision_Errors = 1, 
-          Major_Numerical_Errors = 11, 
-          Minor_Numerical_Errors = 3)
+          Major_Numerical_Errors = 10, 
+          Minor_Numerical_Errors = 4)
 ```
 
-There was a minor numerical error in the descriptive statistics for left or right look during test phase (reported as 83%, found in reanalysis to be 83.5%, which I rounded to 84% for consistency). In my first analysis, I neglected to remove trials with a pronounced word (as described in the footnote on page 54), and I then arrived at 83%. One possible explanation is therefore that when the authors say "analyses" in the footnote on page 54, they intend to refer only to inferential analyses and not descriptive analyses.
+In some places, results of t-tests were given as "t < 1" and not statistically significant. In those instances, I have not used the compareValues function. In those instances I have compared t and p values by inspection and they were all found to match (n = 4).
 
 There were several discrepancies in the inferential statistics, for which I have no explanation.
 
