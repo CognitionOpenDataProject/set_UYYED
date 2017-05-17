@@ -224,14 +224,14 @@ div.tocify {
 <div id="pilot-gustav-nilsonne" class="section level4">
 <h4>Pilot: Gustav Nilsonne</h4>
 </div>
+<div id="co-pilot-tom-hardwicke" class="section level4">
+<h4>Co-pilot: Tom Hardwicke</h4>
+</div>
 <div id="start-date-03292017" class="section level4">
 <h4>Start date: 03/29/2017</h4>
 </div>
-<div id="end-date-04062017" class="section level4">
-<h4>End date: 04/06/2017</h4>
-</div>
-<div id="restart-date-after-author-contact-05132017" class="section level4">
-<h4>Restart date after author contact: 05/13/2017</h4>
+<div id="end-date" class="section level4">
+<h4>End date:</h4>
 <hr />
 </div>
 <div id="methods-summary" class="section level4">
@@ -241,7 +241,7 @@ div.tocify {
 </div>
 <div id="target-outcomes" class="section level4">
 <h4>Target outcomes:</h4>
-<p>For this article you should focus on the findings reported for Experiment 1 in section 2.2. Specifically, you should attempt to reproduce all descriptive and inferential analyses reported in the text below and associated tables/figures:</p>
+<p>For this article we will focus on the findings reported for Experiment 1 in section 2.2. Specifically, we will attempt to reproduce all descriptive and inferential analyses reported in the text below and associated tables/figures:</p>
 <blockquote>
 <p>During the learning phase, infants showed at least one left or right look in 81% of the trials. Infants’ mean scores were not significantly above chance for either initial accuracy (mean = −0.02, SE = 0.03, t(30) &lt; 1) or overall accuracy (mean = −0.002, SE = 0.03, t(30) &lt; 1, ns). During the test phase, they showed at least one left or right look in 83% of the trials. The mean latency of the first look was 625 ms (SD: 141 ms), and its mean duration 819 ms (SD: 238 ms). Infants’ mean accuracy scores were significantly above chance, considering both initial accuracy (mean = 0.12, SE = 0.04, t(30) = 3.25, p = 0.0014; see Fig. 2, left panel) and overall accuracy (mean = 0.06, SE = 0.03, t(30) = 1.69, p = 0.050).</p>
 </blockquote>
@@ -253,234 +253,240 @@ div.tocify {
 library(knitr) # for kable table formating
 library(haven) # import and export 'SPSS', 'Stata' and 'SAS' Files
 library(readxl) # import excel files
-library(CODreports) # custom report functions</code></pre>
+library(CODreports) # custom report functions
+library(weights) # for weighted t-tests
+sem &lt;- function(x) {sd(x, na.rm=TRUE) / sqrt(length(x))} # custom function to calculate standard error of the mean</code></pre>
 </div>
 <div id="step-2-load-data" class="section level2">
 <h2>Step 2: Load data</h2>
-<pre class="r"><code>data_raw &lt;- read_excel(&quot;data/tri_final.xlsx&quot;)
-data &lt;- data_raw[-1, ] # Remove column names from data
-names(data) &lt;- data_raw[1, ] # Put column names back in as column names</code></pre>
+<p>NB - we found errors and missing data in the data file shared with the original manuscript and contacted one of the original authors for assistance. They agreed that there were a number of problems with the original data file and sent a second data file intended to replace it. It is not clear why the errors arose in the original data file. Our reproducibility check will use the replacement data file.</p>
+<pre class="r"><code>d &lt;- read_excel(&quot;data/tri_final.xlsx&quot;, skip = 1)</code></pre>
 </div>
 <div id="step-3-tidy-data" class="section level2">
 <h2>Step 3: Tidy data</h2>
-<pre class="r"><code>data$scorefirstlook &lt;- as.numeric(data$scorefirstlook) # Change from character to numeric - gives warning because NAs are introduced, but that is as it should be
-data$RT &lt;- as.numeric(data$RT)
-data$percentLTcongruent &lt;- as.numeric(data$percentLTcongruent)
-data &lt;- data[data$pronounced == &quot;no&quot;, ] # Exclude trials with pronounced words, see footnote on page 54</code></pre>
+<pre class="r"><code>d &lt;- d %&gt;%
+  mutate(scorefirstlook = as.numeric(scorefirstlook)) %&gt;% # Change from character to numeric
+  filter(pronounced == &quot;no&quot;) # Exclude trials with pronounced words, see footnote on page 54</code></pre>
 </div>
 <div id="step-4-run-analysis" class="section level2">
 <h2>Step 4: Run analysis</h2>
 <div id="pre-processing" class="section level3">
 <h3>Pre-processing</h3>
+<blockquote>
+<p>During the learning phase, infants showed at least one left or right look in 81% of the trials</p>
+</blockquote>
+<pre class="r"><code>a &lt;- d %&gt;%
+  filter(phase =='train') %&gt;%
+  mutate(attempted = factor(attempted)) %&gt;%
+  select(attempted)
+
+att_train &lt;- length(a$attempted[a$attempted == 'yes'])/length(a$attempted)
+compareValues(reportedValue = 81, obtainedValue = att_train*100)</code></pre>
+<pre><code>## [1] &quot;MATCH. The reported value (81) and the obtained value (81) differed by 0%. NB obtained value was rounded to 0 decimal places.&quot;</code></pre>
+<blockquote>
+<p>During the test phase, they showed at least one left or right look in 83% of the trials.</p>
+</blockquote>
+<pre class="r"><code>a &lt;- d %&gt;%
+  filter(phase =='test') %&gt;%
+  mutate(attempted = factor(attempted)) %&gt;%
+  select(attempted)
+
+att_test &lt;- length(a$attempted[a$attempted == 'yes'])/length(a$attempted)
+compareValues(reportedValue = 83, obtainedValue = att_test*100)</code></pre>
+<pre><code>## [1] &quot;MINOR NUMERICAL ERROR. The reported value (83) and the obtained value (84) differed by 1.2%. NB obtained value was rounded to 0 decimal places.&quot;</code></pre>
+<blockquote>
+<p>Trials that contained neither a left nor a right look were excluded from the analyses</p>
+</blockquote>
+<pre class="r"><code>d &lt;- d %&gt;% filter(attempted == 'yes')</code></pre>
 <p>For each participant, scores were calculated and scaled, and weights were determined for each participant depending on the number of trials with a recorded response (section 2.2, page 55):</p>
 <blockquote>
 <p>Two individual accuracy measures were computed based on infants’ left and right looks (hence excluding the other looks): initial accuracy, defined as proportion of first fixations to correct side, and overall accuracy, defined as proportion looking time to correct side. Both scores were scaled such that they ran from -1, corresponding to 100% incorrect anticipations, to +1, corresponding to 100% correct anticipations, with 0 representing performance at chance level. To test whether infants’ mean accuracy scores were significantly above chance, we ran onesided t-tests. Given that the number of analyzable test trials varied widely across infants (mean = 14.9; range = 4–27), both because the number of trials was variable and because infants did not necessarily show at least one left or right look in all trials, we used a weighted version. In this version, the contribution of individual infants’ accuracy scores to the t-statistic is proportional to their number of anticipated trials.</p>
 </blockquote>
-<pre class="r"><code># Determine initial accuracy for each individual, training data
-# Initial accuracy is helpfully given by the &quot;scorefirstlook&quot; variable, which I have used as it is, without attempting to reconstruct it from raw data
-for (i in unique(data$subj)){ # Loop over participants
-  data_subj &lt;- data[data$subj == i &amp; data$phase == &quot;train&quot;, ]
-  initial_accuracy &lt;- sum(data_subj$scorefirstlook, na.rm = T)/length(data_subj$scorefirstlook[!is.na(data_subj$scorefirstlook)]) # Find mean accuracy across trials for each participant
-  if (!exists(&quot;data_initial_training&quot;)){ # Make data frame
-    data_initial_training &lt;- data.frame(subj = i, initial_accuracy = initial_accuracy, n_obs = length(data_subj$scorefirstlook[!is.na(data_subj$scorefirstlook)]))
-  } else { # Populate data frame
-    data_initial_training &lt;- rbind(data_initial_training, data.frame(subj = i, initial_accuracy = initial_accuracy, n_obs = length(data_subj$scorefirstlook[!is.na(data_subj$scorefirstlook)])))
-  }
-}
-# Scale initial accuracy
-data_initial_training$initial_accuracy_scaled &lt;- data_initial_training$initial_accuracy * 2 - 1
+<p>Let’s check that the number of analyzable test trials matches:</p>
+<pre class="r"><code>trials &lt;- d %&gt;% group_by(subj) %&gt;%
+  filter(phase == 'test') %&gt;%
+  summarise(n = n()) %&gt;%
+  summarise(mean(n), min(n), max(n))
 
-
-# Determine initial accuracy for each individual, test data
-for (i in unique(data$subj)){
-  data_subj &lt;- data[data$subj == i &amp; data$phase == &quot;test&quot;, ]
-  initial_accuracy &lt;- sum(data_subj$scorefirstlook, na.rm = T)/length(data_subj$scorefirstlook[!is.na(data_subj$scorefirstlook)])
-  if (!exists(&quot;data_initial_test&quot;)){
-    data_initial_test &lt;- data.frame(subj = i, initial_accuracy = initial_accuracy, n_obs = length(data_subj$scorefirstlook[!is.na(data_subj$scorefirstlook)]))
-  } else {
-    data_initial_test &lt;- rbind(data_initial_test, data.frame(subj = i, initial_accuracy = initial_accuracy, n_obs = length(data_subj$scorefirstlook[!is.na(data_subj$scorefirstlook)])))
-  }
-}
-# Scale initial accuracy
-data_initial_test$initial_accuracy_scaled &lt;- data_initial_test$initial_accuracy * 2 - 1
-
-
-# Determine overall accuracy for each individual, training data
-# First find proportion of looks to correct side
-data_looks &lt;- data[, c(32:81)] # Make separate data frame with only the looking data
-data_looks &lt;- sapply(data_looks, as.numeric)
-data$exclude_trial = apply(data_looks, 1, function(x) all(x == 0 )) # Find trials with neither left nor right looks, exclude later
-data$accuracy &lt;- rowSums(data_looks)/50 # Will not be used
-
-for (i in unique(data$subj)){
-  data_subj &lt;- data[data$subj == i &amp; data$phase == &quot;train&quot; &amp; data$exclude_trial == F, , ]
-  overall_accuracy &lt;- mean(data_subj$accuracy) # Do not use
-  overall_percentLTcongruent &lt;- mean(data_subj$percentLTcongruent)
-  if (!exists(&quot;data_overall_training&quot;)){
-    data_overall_training &lt;- data.frame(subj = i, overall_accuracy = overall_accuracy, overall_percentLTcongruent = overall_percentLTcongruent, n_obs = length(data_subj$accuracy[!is.na(data_subj$accuracy)]))
-  } else {
-    data_overall_training &lt;- rbind(data_overall_training, data.frame(subj = i, overall_accuracy = overall_accuracy, overall_percentLTcongruent = overall_percentLTcongruent, n_obs = length(data_subj$accuracy[!is.na(data_subj$accuracy)])))
-  }
-}
-# Scale overall accuracy
-data_overall_training$overall_percentLTcongruent &lt;- (data_overall_training$overall_percentLTcongruent - 50)/50 
-
-# Determine overall accuracy for each individual, test data
-for (i in unique(data$subj)){
-  data_subj &lt;- data[data$subj == i &amp; data$phase == &quot;test&quot; &amp; data$exclude_trial == F, ]
-  overall_accuracy &lt;- mean(data_subj$accuracy) # Do not use
-  overall_percentLTcongruent &lt;- mean(data_subj$percentLTcongruent)
-  if (!exists(&quot;data_overall_test&quot;)){
-    data_overall_test &lt;- data.frame(subj = i, overall_accuracy = overall_accuracy, overall_percentLTcongruent = overall_percentLTcongruent, n_obs = length(data_subj$accuracy[!is.na(data_subj$accuracy)]))
-  } else {
-    data_overall_test &lt;- rbind(data_overall_test, data.frame(subj = i, overall_accuracy = overall_accuracy, overall_percentLTcongruent = overall_percentLTcongruent, n_obs = length(data_subj$accuracy[!is.na(data_subj$accuracy)])))
-  }
-}
-# Scale overall accuracy
-data_overall_test$overall_percentLTcongruent &lt;- (data_overall_test$overall_percentLTcongruent - 50)/50 
-
-# Find duration of first look
-looks &lt;- apply(data_looks, 1, rle)
-for(i in 1:length(looks)){
-  lookdurations &lt;- looks[[i]]
-  firstlook &lt;- which(lookdurations$values == 1 | lookdurations$values == -1)[1]
-  firstlookduration &lt;- lookdurations$lengths[firstlook]
-  if(!exists(&quot;firstlookdurations&quot;)){
-    firstlookdurations &lt;- firstlookduration
-  }else{
-    firstlookdurations &lt;- c(firstlookdurations, firstlookduration)
-  }
-}
-firstlookdurations &lt;- firstlookdurations * 40 # Convert to milliseconds
-data &lt;- cbind(data, firstlookdurations)</code></pre>
-<p>NB: I have calculated overall accuracy as “proportion looking time to correct side” out of the time the participant looked to either side, rather than out of the whole time the participant was looking.</p>
-</div>
-<div id="descriptive-statistics" class="section level3">
-<h3>Descriptive statistics</h3>
-<div id="left-or-right-look-during-learning-phase" class="section level4">
-<h4>Left or right look during learning phase</h4>
-<p>Reported:</p>
+kable(trials)</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="right">mean(n)</th>
+<th align="right">min(n)</th>
+<th align="right">max(n)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="right">15.06452</td>
+<td align="right">4</td>
+<td align="right">27</td>
+</tr>
+</tbody>
+</table>
+<p>Very close, only the mean is very slightly off.</p>
 <blockquote>
-<p>81%</p>
+<p>The mean latency of the first look was 625 ms (SD: 141 ms),</p>
 </blockquote>
-<pre class="r"><code>v1 &lt;- sum(data[data$phase == &quot;train&quot;, ]$attempted == &quot;yes&quot;)/length(data[data$phase == &quot;train&quot;, ]$attempted)
-compareValues(reportedValue = 0.81, obtainedValue = v1)</code></pre>
-<pre><code>## [1] &quot;MATCH. The reported value (0.81) and the obtained value (0.81) differed by 0%. NB obtained value was rounded to 2 decimal places.&quot;</code></pre>
-</div>
-<div id="left-or-right-look-during-test-phase" class="section level4">
-<h4>Left or right look during test phase</h4>
-<p>Reported:</p>
-<blockquote>
-<p>83%</p>
-</blockquote>
-<pre class="r"><code>v2 &lt;- sum(data[data$phase == &quot;test&quot;, ]$attempted == &quot;yes&quot;)/length(data[data$phase == &quot;test&quot;, ]$attempted)
-compareValues(reportedValue = 0.83, obtainedValue = v2)</code></pre>
-<pre><code>## [1] &quot;MINOR NUMERICAL ERROR. The reported value (0.83) and the obtained value (0.84) differed by 1.2%. NB obtained value was rounded to 2 decimal places.&quot;</code></pre>
-</div>
-<div id="first-look-latency-and-duration" class="section level4">
-<h4>First look latency and duration</h4>
-<p>Reported (referring to test phase):</p>
-<blockquote>
-<p>The mean latency of the first look was 625 ms (SD: 141 ms), and its mean duration 819 ms (SD: 238 ms).</p>
-</blockquote>
-<pre class="r"><code>v3 &lt;- mean(data[data$phase == &quot;test&quot; &amp; data$exclude_trial == F, ]$RT) # mean latency
-v4 &lt;- sd(data[data$phase == &quot;test&quot; &amp; data$exclude_trial == F, ]$RT) # sd latency
-v5 &lt;- mean(data[data$phase == &quot;test&quot; &amp; data$exclude_trial == F, ]$firstlookdurations) # mean duration
-v6 &lt;- sd(data[data$phase == &quot;test&quot; &amp; data$exclude_trial == F, ]$firstlookdurations) # sd duration
-
-compareValues(reportedValue = 625, obtainedValue = v3) # mean latency</code></pre>
+<pre class="r"><code>firstLookLatency &lt;- d %&gt;% filter(phase == 'test') %&gt;% summarise(M = mean(RT), SD = sd(RT))
+kable(firstLookLatency)</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="right">M</th>
+<th align="right">SD</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="right">646.9165</td>
+<td align="right">374.2499</td>
+</tr>
+</tbody>
+</table>
+<p>Looks like the values do not match, let’s compare them explictly:</p>
+<pre class="r"><code>compareValues(reportedValue = 625, obtainedValue = firstLookLatency$M)</code></pre>
 <pre><code>## [1] &quot;MINOR NUMERICAL ERROR. The reported value (625) and the obtained value (647) differed by 3.52%. NB obtained value was rounded to 0 decimal places.&quot;</code></pre>
-<pre class="r"><code>compareValues(reportedValue = 141, obtainedValue = v4) # sd latency</code></pre>
+<pre class="r"><code>compareValues(reportedValue = 141, obtainedValue = firstLookLatency$SD)</code></pre>
 <pre><code>## [1] &quot;MAJOR NUMERICAL ERROR. The reported value (141) and the obtained value (374) differed by 165.25%. NB obtained value was rounded to 0 decimal places.&quot;</code></pre>
-<pre class="r"><code>compareValues(reportedValue = 819, obtainedValue = v5) # mean duration</code></pre>
-<pre><code>## [1] &quot;MINOR NUMERICAL ERROR. The reported value (819) and the obtained value (789) differed by 3.66%. NB obtained value was rounded to 0 decimal places.&quot;</code></pre>
-<pre class="r"><code>compareValues(reportedValue = 238, obtainedValue = v6) # sd duration</code></pre>
-<pre><code>## [1] &quot;MAJOR NUMERICAL ERROR. The reported value (238) and the obtained value (457) differed by 92.02%. NB obtained value was rounded to 0 decimal places.&quot;</code></pre>
-</div>
-</div>
-<div id="inferential-statistics" class="section level3">
-<h3>Inferential statistics</h3>
-<div id="training-phase" class="section level4">
-<h4>Training phase</h4>
-<p>Reported:</p>
 <blockquote>
-<p>Infants’ mean scores were not significantly above chance for either initial accuracy (mean = −0.02, SE = 0.03, t(30) &lt; 1) or overall accuracy (mean = −0.002, SE = 0.03, t(30) &lt; 1, ns).</p>
+<p>and its mean duration 819 ms (SD: 238 ms).</p>
 </blockquote>
-<pre class="r"><code># Initial accuracy, training
-ttest1 &lt;- t.test(data_initial_training$initial_accuracy_scaled, weights = data_initial_training$n_obs, alternative = &quot;greater&quot;)
-se1 &lt;- abs((ttest1$conf.int[1] - ttest1$estimate) / 1.96)
-ttest1$statistic</code></pre>
-<pre><code>##          t 
-## -0.5815243</code></pre>
-<pre class="r"><code>ttest1$p.value</code></pre>
-<pre><code>## [1] 0.7173843</code></pre>
-<pre class="r"><code>compareValues(reportedValue = -0.02, obtainedValue = ttest1$estimate) # mean</code></pre>
+<p>Need to seek clarfification on how this was calculated.</p>
+<p>Let’s calculate the two accuracy measures:</p>
+<pre class="r"><code>accTraining &lt;- d %&gt;% 
+  filter(phase == &quot;train&quot;) %&gt;% # training phase
+  mutate(totalTime = LTcongruent + LTincongruent) %&gt;%
+  group_by(subj) %&gt;%
+  summarise(initialAcc = sum(scorefirstlook, na.rm = T)/n(), 
+            overallAcc = sum(LTcongruent)/sum(totalTime),
+            n_obs = n()) %&gt;%
+  mutate(initialAccScaled = initialAcc * 2 - 1,
+         overallAccScaled = overallAcc * 2 - 1)
+
+accTest &lt;- d %&gt;% 
+  filter(phase == &quot;test&quot;) %&gt;% # test phase
+  mutate(totalTime = LTcongruent + LTincongruent) %&gt;%
+  group_by(subj) %&gt;%
+  summarise(initialAcc = sum(scorefirstlook, na.rm = T)/n(),
+            overallAcc = sum(LTcongruent)/sum(totalTime),
+            n_obs = n()) %&gt;%
+  mutate(initialAccScaled = initialAcc * 2 - 1,
+         overallAccScaled = overallAcc * 2 - 1)
+
+# summary stats
+trainingStats &lt;- accTraining %&gt;% summarise(initial_M = mean(initialAccScaled), initial_SE = sem(initialAccScaled),
+                                 overall_M = mean(overallAccScaled), overall_SE = sem(overallAccScaled))
+
+testStats &lt;- accTest %&gt;% summarise(initial_M = mean(initialAccScaled), initial_SE = sem(initialAccScaled),
+                                 overall_M = mean(overallAccScaled), overall_SE = sem(overallAccScaled))</code></pre>
+<p>For the training phase:</p>
+<blockquote>
+<p>Infants’ mean scores were not significantly above chance for either initial accuracy (mean = −0.02, SE = 0.03, t(30) &lt; 1)</p>
+</blockquote>
+<pre class="r"><code>## for initial accuracy
+compareValues(reportedValue = -0.02, obtainedValue = trainingStats$initial_M)</code></pre>
 <pre><code>## [1] &quot;MATCH. The reported value (-0.02) and the obtained value (-0.02) differed by 0%. NB obtained value was rounded to 2 decimal places.&quot;</code></pre>
-<pre class="r"><code>compareValues(reportedValue = 0.03, obtainedValue = se1) # SE</code></pre>
+<pre class="r"><code>compareValues(reportedValue = 0.03, obtainedValue = trainingStats$initial_SE)</code></pre>
 <pre><code>## [1] &quot;MATCH. The reported value (0.03) and the obtained value (0.03) differed by 0%. NB obtained value was rounded to 2 decimal places.&quot;</code></pre>
-<pre class="r"><code>compareValues(reportedValue = 30, obtainedValue = ttest1$parameter) # df</code></pre>
-<pre><code>## [1] &quot;MATCH. The reported value (30) and the obtained value (30) differed by 0%. NB obtained value was rounded to 0 decimal places.&quot;</code></pre>
-<pre class="r"><code># Overall accuracy, training
-ttest2 &lt;- t.test(data_overall_training$overall_percentLTcongruent, weights = data_overall_training$n_obs, alternative = &quot;greater&quot;)
-se2 &lt;- round(abs((ttest2$conf.int[1] - ttest2$estimate) / 1.96), 2)
-ttest2$statistic</code></pre>
-<pre><code>##         t 
-## -1.018025</code></pre>
-<pre class="r"><code>ttest2$p.value</code></pre>
-<pre><code>## [1] 0.8415969</code></pre>
-<pre class="r"><code>compareValues(reportedValue = -0.002, obtainedValue = ttest2$estimate) # mean</code></pre>
-<pre><code>## [1] &quot;MAJOR NUMERICAL ERROR. The reported value (-0.002) and the obtained value (-0.029) differed by 1350%. NB obtained value was rounded to 3 decimal places.&quot;</code></pre>
-<pre class="r"><code>compareValues(reportedValue = 0.03, obtainedValue = se2) # SE</code></pre>
-<pre><code>## [1] &quot;MAJOR NUMERICAL ERROR. The reported value (0.03) and the obtained value (0.02) differed by 33.33%. NB obtained value was rounded to 2 decimal places.&quot;</code></pre>
-<pre class="r"><code>compareValues(reportedValue = 30, obtainedValue = ttest2$parameter) # df</code></pre>
-<pre><code>## [1] &quot;MATCH. The reported value (30) and the obtained value (30) differed by 0%. NB obtained value was rounded to 0 decimal places.&quot;</code></pre>
-</div>
-<div id="test-phase" class="section level4">
-<h4>Test phase</h4>
-<p>Reported:</p>
+<pre class="r"><code>wtd.t.test(accTraining$initialAccScaled, weight = accTraining$n_obs, alternative = &quot;greater&quot;)</code></pre>
+<pre><code>## $test
+## [1] &quot;One Sample Weighted T-Test&quot;
+## 
+## $coefficients
+##   t.value        df   p.value 
+## -0.517196 30.000000  0.695594 
+## 
+## $additional
+##  Difference        Mean Alternative    Std. Err 
+## -0.01717305 -0.01717305  0.00000000  0.03320415</code></pre>
+<pre class="r"><code># eyeballing indicates that the df and t value are accurately reported.</code></pre>
 <blockquote>
-<p>Infants’ mean accuracy scores were significantly above chance, considering both initial accuracy (mean = 0.12, SE = 0.04, t(30) = 3.25, p = 0.0014; see Fig. 2, left panel) and overall accuracy (mean = 0.06, SE = 0.03, t(30) = 1.69, p = 0.050).</p>
+<p>or overall accuracy (mean = −0.002, SE = 0.03, t(30) &lt; 1, ns).</p>
 </blockquote>
-<pre class="r"><code># Initial accuracy, test
-ttest3 &lt;- t.test(data_initial_test$initial_accuracy_scaled, weights = data_initial_test$n_obs, alternative = &quot;greater&quot;)
-se3 &lt;- abs((ttest3$conf.int[1] - ttest3$estimate) / 1.96)
-
-compareValues(reportedValue = 0.12, obtainedValue = ttest3$estimate) # mean</code></pre>
+<pre class="r"><code>## for overall accuracy
+compareValues(reportedValue = -0.002, obtainedValue = trainingStats$overall_M)</code></pre>
+<pre><code>## [1] &quot;MATCH. The reported value (-0.002) and the obtained value (-0.002) differed by 0%. NB obtained value was rounded to 3 decimal places.&quot;</code></pre>
+<pre class="r"><code>compareValues(reportedValue = 0.03, obtainedValue = trainingStats$overall_SE)</code></pre>
+<pre><code>## [1] &quot;MATCH. The reported value (0.03) and the obtained value (0.03) differed by 0%. NB obtained value was rounded to 2 decimal places.&quot;</code></pre>
+<pre class="r"><code>wtd.t.test(accTraining$overallAccScaled, weight = accTraining$n_obs, alternative = &quot;greater&quot;)</code></pre>
+<pre><code>## $test
+## [1] &quot;One Sample Weighted T-Test&quot;
+## 
+## $coefficients
+##     t.value          df     p.value 
+## -0.05201573 30.00000000  0.52056951 
+## 
+## $additional
+##   Difference         Mean  Alternative     Std. Err 
+## -0.001425934 -0.001425934  0.000000000  0.027413507</code></pre>
+<pre class="r"><code># eyeballing indicates that the df and t value are accurately reported.</code></pre>
+<p>For the test phase:</p>
+<blockquote>
+<p>Infants’ mean accuracy scores were significantly above chance, considering both initial accuracy (mean = 0.12, SE = 0.04, t(30) = 3.25, p = 0.0014; see Fig. 2, left panel)…</p>
+</blockquote>
+<pre class="r"><code>## for initial accuracy
+compareValues(reportedValue = 0.12, obtainedValue = testStats$initial_M)</code></pre>
 <pre><code>## [1] &quot;MINOR NUMERICAL ERROR. The reported value (0.12) and the obtained value (0.11) differed by 8.33%. NB obtained value was rounded to 2 decimal places.&quot;</code></pre>
-<pre class="r"><code>compareValues(reportedValue = 0.04, obtainedValue = se3) # SE</code></pre>
-<pre><code>## [1] &quot;MATCH. The reported value (0.04) and the obtained value (0.04) differed by 0%. NB obtained value was rounded to 2 decimal places.&quot;</code></pre>
-<pre class="r"><code>compareValues(reportedValue = 30, obtainedValue = ttest3$parameter) # df</code></pre>
-<pre><code>## [1] &quot;MATCH. The reported value (30) and the obtained value (30) differed by 0%. NB obtained value was rounded to 0 decimal places.&quot;</code></pre>
-<pre class="r"><code>compareValues(reportedValue = 3.25, obtainedValue = ttest3$statistic) # t</code></pre>
-<pre><code>## [1] &quot;MAJOR NUMERICAL ERROR. The reported value (3.25) and the obtained value (2.16) differed by 33.54%. NB obtained value was rounded to 2 decimal places.&quot;</code></pre>
-<pre class="r"><code>compareValues(reportedValue = 0.0014, obtainedValue = ttest3$p.value, isP = T) # p</code></pre>
-<pre><code>## [1] &quot;MAJOR NUMERICAL ERROR. The reported value (0.0014) and the obtained value (0.0193) differed by 1278.57%. NB obtained value was rounded to 4 decimal places.&quot;</code></pre>
-<pre class="r"><code># Overall accuracy, test
-ttest4 &lt;- t.test(data_overall_test$overall_percentLTcongruent, weights = data_overall_test$n_obs, alternative = &quot;greater&quot;)
-se4 &lt;- abs((ttest4$conf.int[1] - ttest4$estimate) / 1.96)
-
-compareValues(reportedValue = 0.06, obtainedValue = ttest4$estimate) # mean</code></pre>
+<pre class="r"><code>compareValues(reportedValue = 0.04, obtainedValue = testStats$initial_SE)</code></pre>
+<pre><code>## [1] &quot;MAJOR NUMERICAL ERROR. The reported value (0.04) and the obtained value (0.05) differed by 25%. NB obtained value was rounded to 2 decimal places.&quot;</code></pre>
+<pre class="r"><code>t.out &lt;- wtd.t.test(accTest$initialAccScaled, weight = accTest$n_obs, alternative = &quot;greater&quot;)
+t.out</code></pre>
+<pre><code>## $test
+## [1] &quot;One Sample Weighted T-Test&quot;
+## 
+## $coefficients
+##      t.value           df      p.value 
+##  2.992946378 30.000000000  0.002743203 
+## 
+## $additional
+##  Difference        Mean Alternative    Std. Err 
+##  0.11777302  0.11777302  0.00000000  0.03935019</code></pre>
+<p>There seem to be some discrepancies with the t-test outcome, let’s check them explicitly:</p>
+<pre class="r"><code># compare t-value
+compareValues(reportedValue = 3.25, obtainedValue = t.out$coefficients[['t.value']])</code></pre>
+<pre><code>## [1] &quot;MINOR NUMERICAL ERROR. The reported value (3.25) and the obtained value (2.99) differed by 8%. NB obtained value was rounded to 2 decimal places.&quot;</code></pre>
+<pre class="r"><code># compare p-value
+compareValues(reportedValue = 0.0014, obtainedValue = t.out$coefficients[['p.value']], isP = T)</code></pre>
+<pre><code>## [1] &quot;MAJOR NUMERICAL ERROR. The reported value (0.0014) and the obtained value (0.0027) differed by 92.86%. NB obtained value was rounded to 4 decimal places.&quot;</code></pre>
+<blockquote>
+<p>…and overall accuracy (mean = 0.06, SE = 0.03, t(30) = 1.69, p = 0.050).</p>
+</blockquote>
+<pre class="r"><code>## for overall accuracy
+compareValues(reportedValue = 0.06, obtainedValue = testStats$overall_M)</code></pre>
 <pre><code>## [1] &quot;MAJOR NUMERICAL ERROR. The reported value (0.06) and the obtained value (0.05) differed by 16.67%. NB obtained value was rounded to 2 decimal places.&quot;</code></pre>
-<pre class="r"><code>compareValues(reportedValue = 0.03, obtainedValue = se4) # SE</code></pre>
+<pre class="r"><code>compareValues(reportedValue = 0.03, obtainedValue = testStats$overall_SE)</code></pre>
 <pre><code>## [1] &quot;MAJOR NUMERICAL ERROR. The reported value (0.03) and the obtained value (0.04) differed by 33.33%. NB obtained value was rounded to 2 decimal places.&quot;</code></pre>
-<pre class="r"><code>compareValues(reportedValue = 30, obtainedValue = ttest4$parameter) # df</code></pre>
-<pre><code>## [1] &quot;MATCH. The reported value (30) and the obtained value (30) differed by 0%. NB obtained value was rounded to 0 decimal places.&quot;</code></pre>
-<pre class="r"><code>compareValues(reportedValue = 1.69, obtainedValue = ttest4$statistic) # t</code></pre>
-<pre><code>## [1] &quot;MAJOR NUMERICAL ERROR. The reported value (1.69) and the obtained value (1.24) differed by 26.63%. NB obtained value was rounded to 2 decimal places.&quot;</code></pre>
-<pre class="r"><code>compareValues(reportedValue = 0.050, obtainedValue = ttest4$p.value, isP = T) # p</code></pre>
-<pre><code>## [1] &quot;MAJOR NUMERICAL ERROR. The reported value (0.05) and the obtained value (0.11) differed by 120%. NB obtained value was rounded to 2 decimal places.&quot;</code></pre>
-<p>Note: The reported p-value of 0.050 was interpreted as statistically significant, but the recalculated p-value was not statistically significant at the 0.05 threshold. I will therefore code this discrepancy as a decision error, even though the original p value was not &lt; 0.05.</p>
-</div>
+<pre class="r"><code>t.out &lt;- wtd.t.test(accTest$overallAccScaled, weight = accTest$n_obs, alternative = &quot;greater&quot;)
+t.out</code></pre>
+<pre><code>## $test
+## [1] &quot;One Sample Weighted T-Test&quot;
+## 
+## $coefficients
+##     t.value          df     p.value 
+##  1.82336202 30.00000000  0.03911361 
+## 
+## $additional
+##  Difference        Mean Alternative    Std. Err 
+##  0.06379325  0.06379325  0.00000000  0.03498661</code></pre>
+<p>There seem to be some discrepancies with the t-test outcome, let’s check them explicitly:</p>
+<pre class="r"><code># compare t-value
+compareValues(reportedValue = 1.69, obtainedValue = t.out$coefficients[['t.value']])</code></pre>
+<pre><code>## [1] &quot;MINOR NUMERICAL ERROR. The reported value (1.69) and the obtained value (1.82) differed by 7.69%. NB obtained value was rounded to 2 decimal places.&quot;</code></pre>
+<pre class="r"><code># compare p-value
+compareValues(reportedValue = .05, obtainedValue = t.out$coefficients[['p.value']], isP = T)</code></pre>
+<pre><code>## [1] &quot;DECISION ERROR and MAJOR NUMERICAL ERROR. The reported value (0.05) and the obtained value (0.04) differed by 20%. NB obtained value was rounded to 2 decimal places.&quot;</code></pre>
 </div>
 </div>
 <div id="step-5-conclusion" class="section level2">
 <h2>Step 5: Conclusion</h2>
-<pre class="r"><code>codReport(Report_Type = 'pilot',
+<pre class="r"><code>codReport(Report_Type = 'joint',
           Article_ID = 'UYYED', 
           Insufficient_Information_Errors = 0,
-          Decision_Errors = 1, 
-          Major_Numerical_Errors = 10, 
-          Minor_Numerical_Errors = 4)</code></pre>
+          Decision_Errors = 0, 
+          Major_Numerical_Errors = 11, 
+          Minor_Numerical_Errors = 3)</code></pre>
 <table>
 <thead>
 <tr class="header">
@@ -494,15 +500,13 @@ compareValues(reportedValue = 0.06, obtainedValue = ttest4$estimate) # mean</cod
 <tbody>
 <tr class="odd">
 <td align="right">0</td>
-<td align="right">1</td>
-<td align="right">10</td>
-<td align="right">4</td>
+<td align="right">0</td>
+<td align="right">11</td>
+<td align="right">3</td>
 <td align="left">Failure</td>
 </tr>
 </tbody>
 </table>
-<p>In some places, results of t-tests were given as “t &lt; 1” and not statistically significant. In those instances, I have not used the compareValues function. In those instances I have compared t and p values by inspection and they were all found to match (n = 4).</p>
-<p>There were several discrepancies in the inferential statistics, for which I have no explanation.</p>
 <pre class="r"><code>devtools::session_info()</code></pre>
 <pre><code>##  setting  value                       
 ##  version  R version 3.3.2 (2016-10-31)
@@ -511,66 +515,92 @@ compareValues(reportedValue = 0.06, obtainedValue = ttest4$estimate) # mean</cod
 ##  language (EN)                        
 ##  collate  en_US.UTF-8                 
 ##  tz       America/Los_Angeles         
-##  date     2017-05-15                  
+##  date     2017-05-17                  
 ## 
-##  package    * version  date      
-##  assertthat   0.1      2013-12-06
-##  backports    1.0.5    2017-01-18
-##  broom        0.4.2    2017-02-13
-##  cellranger   1.1.0    2016-07-27
-##  CODreports * 0.1      2017-05-02
-##  colorspace   1.3-2    2016-12-14
-##  DBI          0.5-1    2016-09-10
-##  devtools     1.12.0   2016-06-24
-##  digest       0.6.11   2017-01-03
-##  dplyr      * 0.5.0    2016-06-24
-##  evaluate     0.10     2016-10-11
-##  forcats      0.2.0    2017-01-23
-##  foreign      0.8-67   2016-09-13
-##  ggplot2    * 2.2.1    2016-12-30
-##  gtable       0.2.0    2016-02-26
-##  haven      * 1.0.0    2016-09-23
-##  highr        0.6      2016-05-09
-##  hms          0.3      2016-11-22
-##  htmltools    0.3.5    2016-03-21
-##  httr         1.2.1    2016-07-03
-##  jsonlite     1.3      2017-02-28
-##  knitr      * 1.15.1   2016-11-22
-##  lattice      0.20-34  2016-09-06
-##  lazyeval     0.2.0    2016-06-12
-##  lubridate    1.6.0    2016-09-13
-##  magrittr     1.5      2014-11-22
-##  memoise      1.0.0    2016-01-29
-##  mnormt       1.5-5    2016-10-15
-##  modelr       0.1.0    2016-08-31
-##  munsell      0.4.3    2016-02-13
-##  nlme         3.1-128  2016-05-10
-##  plyr         1.8.4    2016-06-08
-##  psych        1.7.3.21 2017-03-22
-##  purrr      * 0.2.2    2016-06-18
-##  R6           2.2.0    2016-10-05
-##  Rcpp         0.12.10  2017-03-19
-##  readr      * 1.1.0    2017-03-22
-##  readxl     * 1.0.0    2017-04-18
-##  reshape2     1.4.2    2016-10-22
-##  rmarkdown    1.5      2017-04-26
-##  rprojroot    1.2      2017-01-16
-##  rvest        0.3.2    2016-06-17
-##  scales       0.4.1    2016-11-09
-##  stringi      1.1.2    2016-10-01
-##  stringr      1.2.0    2017-02-18
-##  tibble     * 1.3.0    2017-04-01
-##  tidyr      * 0.6.1    2017-01-10
-##  tidyverse  * 1.1.1    2017-01-27
-##  withr        1.0.2    2016-06-20
-##  xml2         1.1.1    2017-01-24
-##  yaml         2.1.14   2016-11-12
+##  package      * version  date      
+##  acepack        1.4.1    2016-10-29
+##  assertthat     0.1      2013-12-06
+##  backports      1.0.5    2017-01-18
+##  base64enc      0.1-3    2015-07-28
+##  broom          0.4.2    2017-02-13
+##  cellranger     1.1.0    2016-07-27
+##  checkmate      1.8.2    2016-11-02
+##  cluster        2.0.5    2016-10-08
+##  CODreports   * 0.1      2017-05-02
+##  colorspace     1.3-2    2016-12-14
+##  data.table     1.10.0   2016-12-03
+##  DBI            0.5-1    2016-09-10
+##  devtools       1.12.0   2016-06-24
+##  digest         0.6.11   2017-01-03
+##  dplyr        * 0.5.0    2016-06-24
+##  evaluate       0.10     2016-10-11
+##  forcats        0.2.0    2017-01-23
+##  foreign        0.8-67   2016-09-13
+##  Formula      * 1.2-1    2015-04-07
+##  gdata        * 2.17.0   2015-07-04
+##  ggplot2      * 2.2.1    2016-12-30
+##  gridExtra      2.2.1    2016-02-29
+##  gtable         0.2.0    2016-02-26
+##  gtools         3.5.0    2015-05-29
+##  haven        * 1.0.0    2016-09-23
+##  highr          0.6      2016-05-09
+##  Hmisc        * 4.0-2    2016-12-31
+##  hms            0.3      2016-11-22
+##  htmlTable      1.9      2017-01-26
+##  htmltools      0.3.5    2016-03-21
+##  htmlwidgets    0.8      2016-11-09
+##  httr           1.2.1    2016-07-03
+##  jsonlite       1.3      2017-02-28
+##  knitr        * 1.15.1   2016-11-22
+##  lattice      * 0.20-34  2016-09-06
+##  latticeExtra   0.6-28   2016-02-09
+##  lazyeval       0.2.0    2016-06-12
+##  lubridate      1.6.0    2016-09-13
+##  magrittr       1.5      2014-11-22
+##  MASS           7.3-45   2016-04-21
+##  Matrix         1.2-7.1  2016-09-01
+##  memoise        1.0.0    2016-01-29
+##  mice         * 2.30     2017-02-18
+##  mnormt         1.5-5    2016-10-15
+##  modelr         0.1.0    2016-08-31
+##  munsell        0.4.3    2016-02-13
+##  nlme           3.1-128  2016-05-10
+##  nnet           7.3-12   2016-02-02
+##  plyr           1.8.4    2016-06-08
+##  psych          1.7.3.21 2017-03-22
+##  purrr        * 0.2.2    2016-06-18
+##  R6             2.2.0    2016-10-05
+##  RColorBrewer   1.1-2    2014-12-07
+##  Rcpp           0.12.10  2017-03-19
+##  readr        * 1.1.0    2017-03-22
+##  readxl       * 1.0.0    2017-04-18
+##  reshape2       1.4.2    2016-10-22
+##  rmarkdown      1.5      2017-04-26
+##  rpart          4.1-10   2015-06-29
+##  rprojroot      1.2      2017-01-16
+##  rvest          0.3.2    2016-06-17
+##  scales         0.4.1    2016-11-09
+##  stringi        1.1.2    2016-10-01
+##  stringr        1.2.0    2017-02-18
+##  survival     * 2.41-2   2017-03-16
+##  tibble       * 1.3.0    2017-04-01
+##  tidyr        * 0.6.1    2017-01-10
+##  tidyverse    * 1.1.1    2017-01-27
+##  weights      * 0.85     2016-02-12
+##  withr          1.0.2    2016-06-20
+##  xml2           1.1.1    2017-01-24
+##  yaml           2.1.14   2016-11-12
 ##  source                                              
 ##  CRAN (R 3.3.0)                                      
-##  CRAN (R 3.3.2)                                      
+##  CRAN (R 3.3.0)                                      
 ##  CRAN (R 3.3.2)                                      
 ##  CRAN (R 3.3.0)                                      
+##  CRAN (R 3.3.2)                                      
+##  CRAN (R 3.3.0)                                      
+##  CRAN (R 3.3.0)                                      
+##  CRAN (R 3.3.2)                                      
 ##  Github (CognitionOpenDataProject/CODreports@2bbdb9d)
+##  CRAN (R 3.3.2)                                      
 ##  CRAN (R 3.3.2)                                      
 ##  CRAN (R 3.3.0)                                      
 ##  CRAN (R 3.3.0)                                      
@@ -579,26 +609,39 @@ compareValues(reportedValue = 0.06, obtainedValue = ttest4$estimate) # mean</cod
 ##  CRAN (R 3.3.0)                                      
 ##  cran (@0.2.0)                                       
 ##  CRAN (R 3.3.2)                                      
-##  CRAN (R 3.3.2)                                      
-##  CRAN (R 3.3.0)                                      
-##  CRAN (R 3.3.0)                                      
-##  CRAN (R 3.3.0)                                      
-##  CRAN (R 3.3.2)                                      
 ##  CRAN (R 3.3.0)                                      
 ##  CRAN (R 3.3.0)                                      
 ##  CRAN (R 3.3.2)                                      
-##  CRAN (R 3.3.2)                                      
-##  CRAN (R 3.3.2)                                      
-##  CRAN (R 3.3.0)                                      
-##  CRAN (R 3.3.0)                                      
 ##  CRAN (R 3.3.0)                                      
 ##  CRAN (R 3.3.0)                                      
 ##  CRAN (R 3.3.0)                                      
 ##  CRAN (R 3.3.0)                                      
 ##  CRAN (R 3.3.0)                                      
 ##  CRAN (R 3.3.2)                                      
+##  CRAN (R 3.3.2)                                      
+##  CRAN (R 3.3.2)                                      
 ##  CRAN (R 3.3.0)                                      
 ##  CRAN (R 3.3.2)                                      
+##  CRAN (R 3.3.0)                                      
+##  CRAN (R 3.3.2)                                      
+##  CRAN (R 3.3.2)                                      
+##  CRAN (R 3.3.2)                                      
+##  CRAN (R 3.3.0)                                      
+##  CRAN (R 3.3.0)                                      
+##  CRAN (R 3.3.0)                                      
+##  CRAN (R 3.3.0)                                      
+##  CRAN (R 3.3.0)                                      
+##  CRAN (R 3.3.2)                                      
+##  CRAN (R 3.3.0)                                      
+##  CRAN (R 3.3.2)                                      
+##  CRAN (R 3.3.0)                                      
+##  CRAN (R 3.3.0)                                      
+##  CRAN (R 3.3.0)                                      
+##  CRAN (R 3.3.2)                                      
+##  CRAN (R 3.3.2)                                      
+##  CRAN (R 3.3.0)                                      
+##  CRAN (R 3.3.2)                                      
+##  CRAN (R 3.3.0)                                      
 ##  CRAN (R 3.3.0)                                      
 ##  CRAN (R 3.3.0)                                      
 ##  cran (@0.12.10)                                     
@@ -607,13 +650,16 @@ compareValues(reportedValue = 0.06, obtainedValue = ttest4$estimate) # mean</cod
 ##  CRAN (R 3.3.0)                                      
 ##  CRAN (R 3.3.2)                                      
 ##  CRAN (R 3.3.2)                                      
+##  CRAN (R 3.3.2)                                      
 ##  CRAN (R 3.3.0)                                      
 ##  CRAN (R 3.3.2)                                      
 ##  CRAN (R 3.3.0)                                      
 ##  cran (@1.2.0)                                       
+##  CRAN (R 3.3.2)                                      
 ##  cran (@1.3.0)                                       
 ##  CRAN (R 3.3.2)                                      
 ##  CRAN (R 3.3.2)                                      
+##  CRAN (R 3.3.0)                                      
 ##  CRAN (R 3.3.0)                                      
 ##  cran (@1.1.1)                                       
 ##  CRAN (R 3.3.2)</code></pre>

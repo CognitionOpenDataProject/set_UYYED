@@ -38,19 +38,22 @@ library(knitr) # for kable table formating
 library(haven) # import and export 'SPSS', 'Stata' and 'SAS' Files
 library(readxl) # import excel files
 library(CODreports) # custom report functions
+library(weights) # for weighted t-tests
 sem <- function(x) {sd(x, na.rm=TRUE) / sqrt(length(x))} # custom function to calculate standard error of the mean
 ```
 
 ## Step 2: Load data
 
+NB - we found errors and missing data in the data file shared with the original manuscript and contacted one of the original authors for assistance. They agreed that there were a number of problems with the original data file and sent a second data file intended to replace it. It is not clear why the errors arose in the original data file. Our reproducibility check will use the replacement data file.
+
 ```{r}
-data <- d <- read_excel("data/data.xlsx", sheet = 2)
+d <- read_excel("data/tri_final.xlsx", skip = 1)
 ```
 
 ## Step 3: Tidy data
 
 ```{r}
-data <- d <- d %>%
+d <- d %>%
   mutate(scorefirstlook = as.numeric(scorefirstlook)) %>% # Change from character to numeric
   filter(pronounced == "no") # Exclude trials with pronounced words, see footnote on page 54
 ```
@@ -59,137 +62,164 @@ data <- d <- d %>%
 
 ### Pre-processing
 
+> During the learning phase, infants showed at least one left or right look in 81% of the trials
+
+```{r}
+a <- d %>%
+  filter(phase =='train') %>%
+  mutate(attempted = factor(attempted)) %>%
+  select(attempted)
+
+att_train <- length(a$attempted[a$attempted == 'yes'])/length(a$attempted)
+compareValues(reportedValue = 81, obtainedValue = att_train*100)
+```
+
+> During the test phase, they showed at least one left or right look in 83% of the trials. 
+
+```{r}
+a <- d %>%
+  filter(phase =='test') %>%
+  mutate(attempted = factor(attempted)) %>%
+  select(attempted)
+
+att_test <- length(a$attempted[a$attempted == 'yes'])/length(a$attempted)
+compareValues(reportedValue = 83, obtainedValue = att_test*100)
+```
+
+> Trials that contained neither a left nor a right look were excluded from the analyses
+
+```{r}
+d <- d %>% filter(attempted == 'yes')
+```
+
 For each participant, scores were calculated and scaled, and weights were determined for each participant depending on the number of trials with a recorded response (section 2.2, page 55):
 
 > Two individual accuracy measures were computed based on infants’ left and right looks (hence excluding the other looks): initial accuracy, defined as proportion of first fixations to correct side, and overall accuracy, defined as proportion looking time to correct side. Both scores were scaled such that they ran from -1, corresponding to 100% incorrect anticipations, to +1, corresponding to 100% correct anticipations, with 0 representing performance at chance level. To test whether infants’ mean accuracy scores were significantly above chance, we ran onesided t-tests. Given that the number of analyzable test trials varied widely across infants (mean = 14.9; range = 4–27), both because the number of trials was variable and because infants did not necessarily show at least one left or right look in all trials, we used a weighted version. In this version, the contribution of individual infants’ accuracy scores to the t-statistic is proportional to their number of anticipated trials.
 
+Let's check that the number of analyzable test trials matches:
 
 ```{r}
-# Determine "initial accuracy"" for each individual, training data
-# Initial accuracy is helpfully given by the "scorefirstlook" variable, which we have used as it is, without attempting to reconstruct it from raw data. Scaling is applied.
+trials <- d %>% group_by(subj) %>%
+  filter(phase == 'test') %>%
+  summarise(n = n()) %>%
+  summarise(mean(n), min(n), max(n))
 
-initialAccTraining <- d %>% 
-  filter(phase == "training", attempted == "yes") %>% 
+kable(trials)
+```
+
+Very close, only the mean is very slightly off.
+
+> The mean latency of the first look was 625 ms (SD: 141 ms), 
+
+```{r}
+firstLookLatency <- d %>% filter(phase == 'test') %>% summarise(M = mean(RT), SD = sd(RT))
+kable(firstLookLatency)
+```
+
+Looks like the values do not match, let's compare them explictly:
+
+```{r}
+compareValues(reportedValue = 625, obtainedValue = firstLookLatency$M)
+compareValues(reportedValue = 141, obtainedValue = firstLookLatency$SD)
+```
+
+> and its mean duration 819 ms (SD: 238 ms). 
+
+Need to seek clarfification on how this was calculated.
+
+
+Let's calculate the two accuracy measures:
+
+```{r}
+accTraining <- d %>% 
+  filter(phase == "train") %>% # training phase
+  mutate(totalTime = LTcongruent + LTincongruent) %>%
   group_by(subj) %>%
   summarise(initialAcc = sum(scorefirstlook, na.rm = T)/n(), 
+            overallAcc = sum(LTcongruent)/sum(totalTime),
             n_obs = n()) %>%
-  mutate(initialAccScaled = initialAcc * 2 - 1)
+  mutate(initialAccScaled = initialAcc * 2 - 1,
+         overallAccScaled = overallAcc * 2 - 1)
 
-initialAccTest <- d %>% 
-  filter(phase == "test", attempted == "yes") %>% 
+accTest <- d %>% 
+  filter(phase == "test") %>% # test phase
+  mutate(totalTime = LTcongruent + LTincongruent) %>%
   group_by(subj) %>%
-  summarise(initialAcc = sum(scorefirstlook, na.rm = T)/n(), 
+  summarise(initialAcc = sum(scorefirstlook, na.rm = T)/n(),
+            overallAcc = sum(LTcongruent)/sum(totalTime),
             n_obs = n()) %>%
-  mutate(initialAccScaled = initialAcc * 2 - 1)
+  mutate(initialAccScaled = initialAcc * 2 - 1,
+         overallAccScaled = overallAcc * 2 - 1)
+
+# summary stats
+trainingStats <- accTraining %>% summarise(initial_M = mean(initialAccScaled), initial_SE = sem(initialAccScaled),
+                                 overall_M = mean(overallAccScaled), overall_SE = sem(overallAccScaled))
+
+testStats <- accTest %>% summarise(initial_M = mean(initialAccScaled), initial_SE = sem(initialAccScaled),
+                                 overall_M = mean(overallAccScaled), overall_SE = sem(overallAccScaled))
 ```
+
+For the training phase:
+
+> Infants’ mean scores were not significantly above chance for either initial accuracy (mean = −0.02, SE = 0.03, t(30) < 1) 
 
 ```{r}
-# Determine overall accuracy for each individual defined as "proportion looking time to correct side"
-# LTcorrect should be absolute looking time to correct side.
-# total looking time is 2000ms.
-
+## for initial accuracy
+compareValues(reportedValue = -0.02, obtainedValue = trainingStats$initial_M)
+compareValues(reportedValue = 0.03, obtainedValue = trainingStats$initial_SE)
+wtd.t.test(accTraining$initialAccScaled, weight = accTraining$n_obs, alternative = "greater")
+# eyeballing indicates that the df and t value are accurately reported.
 ```
 
-
-
-### Descriptive statistics
-
-#### Left or right look during learning phase
-Reported:
-
-> 81%
+> or overall accuracy (mean = −0.002, SE = 0.03, t(30) < 1, ns). 
 
 ```{r}
-v1 <- round(sum(data[data$phase == "training", ]$attempted == "yes")/length(data[data$phase == "training", ]$attempted), 2)
-compareValues(reportedValue = 0.81, obtainedValue = v1)
+## for overall accuracy
+compareValues(reportedValue = -0.002, obtainedValue = trainingStats$overall_M)
+compareValues(reportedValue = 0.03, obtainedValue = trainingStats$overall_SE)
+wtd.t.test(accTraining$overallAccScaled, weight = accTraining$n_obs, alternative = "greater")
+# eyeballing indicates that the df and t value are accurately reported.
 ```
 
-#### Left or right look during test phase
-Reported: 
+For the test phase: 
 
-> 83%
+> Infants’ mean accuracy scores were significantly above chance, considering both initial accuracy (mean = 0.12, SE = 0.04, t(30) = 3.25, p = 0.0014; see Fig. 2, left panel)...
 
 ```{r}
-v2 <- round(sum(data[data$phase == "test", ]$attempted == "yes")/length(data[data$phase == "test", ]$attempted), 2)
-compareValues(reportedValue = 0.83, obtainedValue = v2)
+## for initial accuracy
+compareValues(reportedValue = 0.12, obtainedValue = testStats$initial_M)
+compareValues(reportedValue = 0.04, obtainedValue = testStats$initial_SE)
+t.out <- wtd.t.test(accTest$initialAccScaled, weight = accTest$n_obs, alternative = "greater")
+t.out
 ```
 
-#### First look latency and duration
-Reported (referring to test phase): 
-
-> The mean latency of the first look was 625 ms (SD: 141 ms), and its mean duration 819 ms (SD: 238 ms).
+There seem to be some discrepancies with the t-test outcome, let's check them explicitly:
 
 ```{r}
-v3 <- round(mean(data[data$phase == "test" & data$exclude_trial == F, ]$RT), 0) # mean latency
-v4 <- round(sd(data[data$phase == "test" & data$exclude_trial == F, ]$RT), 0) # sd latency
-v5 <- round(mean(data[data$phase == "test" & data$exclude_trial == F, ]$firstlookdurations), 0) # mean duration
-v6 <- round(sd(data[data$phase == "test" & data$exclude_trial == F, ]$firstlookdurations), 0) # sd duration
-
-compareValues(reportedValue = 625, obtainedValue = v3) # mean latency
-compareValues(reportedValue = 141, obtainedValue = v4) # sd latency
-compareValues(reportedValue = 819, obtainedValue = v3) # mean duration
-compareValues(reportedValue = 238, obtainedValue = v4) # sd duration
+# compare t-value
+compareValues(reportedValue = 3.25, obtainedValue = t.out$coefficients[['t.value']])
+# compare p-value
+compareValues(reportedValue = 0.0014, obtainedValue = t.out$coefficients[['p.value']], isP = T)
 ```
 
-
-### Inferential statistics
-
-#### Training phase
-Reported: 
-
-> Infants’ mean scores were not significantly above chance for either initial accuracy (mean = −0.02, SE = 0.03, t(30) < 1) or overall accuracy (mean = −0.002, SE = 0.03, t(30) < 1, ns).
+> ...and overall accuracy (mean = 0.06, SE = 0.03, t(30) = 1.69, p = 0.050).
 
 ```{r}
-# Initial accuracy, training
-ttest1 <- t.test(initialAccTraining$initialAccScaled, weights = initialAccTraining$n_obs, alternative = "greater")
-se1 <- sem(initialAccTraining$initialAccScaled)
-
-ttest1
-
-compareValues(reportedValue = -0.02, obtainedValue = round(ttest1$estimate, 2)) # mean
-compareValues(reportedValue = 0.03, obtainedValue = round(se1, 2)) # SE
-compareValues(reportedValue = 30, obtainedValue = ttest1$parameter) # df
-
-# Overall accuracy, training
-ttest2 <- t.test(data_overall_training$overall_accuracy, weights = data_overall_training$n_obs, alternative = "greater")
-se2 <- round(abs((ttest2$conf.int[1] - ttest2$estimate) / 1.96), 2)
-ttest2$statistic
-ttest2$p.value
-
-compareValues(reportedValue = -0.002, obtainedValue = round(ttest2$estimate, 3)) # mean
-compareValues(reportedValue = 0.03, obtainedValue = se2) # SE
-compareValues(reportedValue = 30, obtainedValue = ttest2$parameter) # df
+## for overall accuracy
+compareValues(reportedValue = 0.06, obtainedValue = testStats$overall_M)
+compareValues(reportedValue = 0.03, obtainedValue = testStats$overall_SE)
+t.out <- wtd.t.test(accTest$overallAccScaled, weight = accTest$n_obs, alternative = "greater")
+t.out
 ```
 
-#### Test phase
-Reported: 
-
-> Infants’ mean accuracy scores were significantly above chance, considering both initial accuracy (mean = 0.12, SE = 0.04, t(30) = 3.25, p = 0.0014; see Fig. 2, left panel) and overall accuracy (mean = 0.06, SE = 0.03, t(30) = 1.69, p = 0.050).
+There seem to be some discrepancies with the t-test outcome, let's check them explicitly:
 
 ```{r}
-# Initial accuracy, test
-ttest3 <- t.test(initialAccTest$initialAccScaled, weights = initialAccTest$n_obs, alternative = "greater")
-se3 <- sem(initialAccTest$initialAccScaled)
-
-compareValues(reportedValue = 0.12, obtainedValue = round(ttest3$estimate, 2)) # mean
-compareValues(reportedValue = 0.04, obtainedValue = se3) # SE
-compareValues(reportedValue = 30, obtainedValue = ttest3$parameter) # df
-compareValues(reportedValue = 3.25, obtainedValue = ttest3$statistic) # t
-compareValues(reportedValue = 0.0014, obtainedValue = round(ttest3$p.value, 4), isP = T) # p
-
-# Overall accuracy, test
-ttest4 <- t.test(data_overall_test$overall_accuracy, weights = data_overall_test$n_obs, alternative = "greater")
-se4 <- round(abs((ttest4$conf.int[1] - ttest4$estimate) / 1.96), 2)
-
-compareValues(reportedValue = 0.06, obtainedValue = round(ttest4$estimate, 2)) # mean
-compareValues(reportedValue = 0.03, obtainedValue = se4) # SE
-compareValues(reportedValue = 30, obtainedValue = ttest4$parameter) # df
-compareValues(reportedValue = 1.69, obtainedValue = ttest4$statistic) # t
-compareValues(reportedValue = 0.050, obtainedValue = round(ttest4$p.value, 3), isP = T) # p
+# compare t-value
+compareValues(reportedValue = 1.69, obtainedValue = t.out$coefficients[['t.value']])
+# compare p-value
+compareValues(reportedValue = .05, obtainedValue = t.out$coefficients[['p.value']], isP = T)
 ```
-
-Note: The reported p-value of 0.050 was interpreted as statistically significant, but the recalculated p-value of 0.091 was not statistically significant at the 0.05 threshold. I will therefore code this discrepancy as a decision error, even though the original p value was not < 0.05.
-
 
 ## Step 5: Conclusion
 
@@ -197,14 +227,12 @@ Note: The reported p-value of 0.050 was interpreted as statistically significant
 codReport(Report_Type = 'joint',
           Article_ID = 'UYYED', 
           Insufficient_Information_Errors = 0,
-          Decision_Errors = 1, 
+          Decision_Errors = 0, 
           Major_Numerical_Errors = 11, 
           Minor_Numerical_Errors = 3)
 ```
 
-There was a minor numerical error in the descriptive statistics for left or right look during test phase (reported as 83%, found in reanalysis to be 83.5%, which I rounded to 84% for consistency). In my first analysis, I neglected to remove trials with a pronounced word (as described in the footnote on page 54), and I then arrived at 83%. One possible explanation is therefore that when the authors say "analyses" in the footnote on page 54, they intend to refer only to inferential analyses and not descriptive analyses.
 
-There were several discrepancies in the inferential statistics, for which I have no explanation.
 
 ```{r session_info, include=TRUE, echo=TRUE, results='markup'}
 devtools::session_info()
