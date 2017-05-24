@@ -10,7 +10,7 @@ output:
 #### Pilot: Gustav Nilsonne
 #### Co-pilot: Tom Hardwicke
 #### Start date: 03/29/2017
-#### End date:
+#### End date: 03/24/2017
 
 -------
 
@@ -44,7 +44,7 @@ sem <- function(x) {sd(x, na.rm=TRUE) / sqrt(length(x))} # custom function to ca
 
 ## Step 2: Load data
 
-NB - we found errors and missing data in the data file shared with the original manuscript and contacted one of the original authors for assistance. They agreed that there were a number of problems with the original data file and sent a second data file intended to replace it. It is not clear why the errors arose in the original data file. Our reproducibility check will use the replacement data file.
+NB - we found errors and missing data in the data file shared with the original manuscript and contacted one of the original authors for assistance (S.P.). They agreed that there were a number of problems with the original data file and sent a second data file intended to replace it. It is not clear why the errors arose in the original data file. Our reproducibility check will use the replacement data file.
 
 ```{r}
 d <- read_excel("data/tri_final.xlsx", skip = 1)
@@ -109,10 +109,16 @@ kable(trials)
 
 Very close, only the mean is very slightly off.
 
+NB. The original author has noted that the value reported in the article is wrong (it was retained from a previous version and not updated) and the value we obtained here is the correct value.
+
 > The mean latency of the first look was 625 ms (SD: 141 ms), 
 
 ```{r}
-firstLookLatency <- d %>% filter(phase == 'test') %>% summarise(M = mean(RT), SD = sd(RT))
+firstLookLatency <- d %>% 
+  filter(phase == 'test') %>% 
+  group_by(subj) %>%
+  summarise(subMean = mean(RT)) %>%
+  summarise(M = mean(subMean), SD = sd(subMean))
 kable(firstLookLatency)
 ```
 
@@ -122,11 +128,6 @@ Looks like the values do not match, let's compare them explictly:
 compareValues(reportedValue = 625, obtainedValue = firstLookLatency$M)
 compareValues(reportedValue = 141, obtainedValue = firstLookLatency$SD)
 ```
-
-> and its mean duration 819 ms (SD: 238 ms). 
-
-Need to seek clarfification on how this was calculated.
-
 
 Let's calculate the two accuracy measures:
 
@@ -202,6 +203,8 @@ compareValues(reportedValue = 3.25, obtainedValue = t.out$coefficients[['t.value
 compareValues(reportedValue = 0.0014, obtainedValue = t.out$coefficients[['p.value']], isP = T)
 ```
 
+NB one of the the original authors has confirmed there is an issue here. Apparently the reported values were based on an old dataset. The values we obtain here are the correct values.
+
 > ...and overall accuracy (mean = 0.06, SE = 0.03, t(30) = 1.69, p = 0.050).
 
 ```{r}
@@ -221,6 +224,10 @@ compareValues(reportedValue = 1.69, obtainedValue = t.out$coefficients[['t.value
 compareValues(reportedValue = .05, obtainedValue = t.out$coefficients[['p.value']], isP = T)
 ```
 
+NB one of the the original authors has confirmed there is an issue here. Apparently the reported values were based on an old dataset. The values we obtain here are the correct values.
+
+Also NB - the authors actually interpret p = .05 as statistically significant. As the correct value is .04, this description is accurate, so we will not consider this a decision error.
+
 ## Step 5: Conclusion
 
 ```{r}
@@ -228,10 +235,10 @@ codReport(Report_Type = 'joint',
           Article_ID = 'UYYED', 
           Insufficient_Information_Errors = 0,
           Decision_Errors = 0, 
-          Major_Numerical_Errors = 11, 
-          Minor_Numerical_Errors = 3)
+          Major_Numerical_Errors = 5, 
+          Minor_Numerical_Errors = 5,
+          Author_Assistance = T)
 ```
-
 
 
 ```{r session_info, include=TRUE, echo=TRUE, results='markup'}

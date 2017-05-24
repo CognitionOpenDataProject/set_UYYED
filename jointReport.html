@@ -230,8 +230,8 @@ div.tocify {
 <div id="start-date-03292017" class="section level4">
 <h4>Start date: 03/29/2017</h4>
 </div>
-<div id="end-date" class="section level4">
-<h4>End date:</h4>
+<div id="end-date-03242017" class="section level4">
+<h4>End date: 03/24/2017</h4>
 <hr />
 </div>
 <div id="methods-summary" class="section level4">
@@ -259,7 +259,7 @@ sem &lt;- function(x) {sd(x, na.rm=TRUE) / sqrt(length(x))} # custom function to
 </div>
 <div id="step-2-load-data" class="section level2">
 <h2>Step 2: Load data</h2>
-<p>NB - we found errors and missing data in the data file shared with the original manuscript and contacted one of the original authors for assistance. They agreed that there were a number of problems with the original data file and sent a second data file intended to replace it. It is not clear why the errors arose in the original data file. Our reproducibility check will use the replacement data file.</p>
+<p>NB - we found errors and missing data in the data file shared with the original manuscript and contacted one of the original authors for assistance (S.P.). They agreed that there were a number of problems with the original data file and sent a second data file intended to replace it. It is not clear why the errors arose in the original data file. Our reproducibility check will use the replacement data file.</p>
 <pre class="r"><code>d &lt;- read_excel(&quot;data/tri_final.xlsx&quot;, skip = 1)</code></pre>
 </div>
 <div id="step-3-tidy-data" class="section level2">
@@ -326,10 +326,15 @@ kable(trials)</code></pre>
 </tbody>
 </table>
 <p>Very close, only the mean is very slightly off.</p>
+<p>NB. The original author has noted that the value reported in the article is wrong (it was retained from a previous version and not updated) and the value we obtained here is the correct value.</p>
 <blockquote>
 <p>The mean latency of the first look was 625 ms (SD: 141 ms),</p>
 </blockquote>
-<pre class="r"><code>firstLookLatency &lt;- d %&gt;% filter(phase == 'test') %&gt;% summarise(M = mean(RT), SD = sd(RT))
+<pre class="r"><code>firstLookLatency &lt;- d %&gt;% 
+  filter(phase == 'test') %&gt;% 
+  group_by(subj) %&gt;%
+  summarise(subMean = mean(RT)) %&gt;%
+  summarise(M = mean(subMean), SD = sd(subMean))
 kable(firstLookLatency)</code></pre>
 <table>
 <thead>
@@ -340,20 +345,16 @@ kable(firstLookLatency)</code></pre>
 </thead>
 <tbody>
 <tr class="odd">
-<td align="right">646.9165</td>
-<td align="right">374.2499</td>
+<td align="right">624.6915</td>
+<td align="right">140.6925</td>
 </tr>
 </tbody>
 </table>
 <p>Looks like the values do not match, let’s compare them explictly:</p>
 <pre class="r"><code>compareValues(reportedValue = 625, obtainedValue = firstLookLatency$M)</code></pre>
-<pre><code>## [1] &quot;MINOR NUMERICAL ERROR. The reported value (625) and the obtained value (647) differed by 3.52%. NB obtained value was rounded to 0 decimal places.&quot;</code></pre>
+<pre><code>## [1] &quot;MATCH. The reported value (625) and the obtained value (625) differed by 0%. NB obtained value was rounded to 0 decimal places.&quot;</code></pre>
 <pre class="r"><code>compareValues(reportedValue = 141, obtainedValue = firstLookLatency$SD)</code></pre>
-<pre><code>## [1] &quot;MAJOR NUMERICAL ERROR. The reported value (141) and the obtained value (374) differed by 165.25%. NB obtained value was rounded to 0 decimal places.&quot;</code></pre>
-<blockquote>
-<p>and its mean duration 819 ms (SD: 238 ms).</p>
-</blockquote>
-<p>Need to seek clarfification on how this was calculated.</p>
+<pre><code>## [1] &quot;MATCH. The reported value (141) and the obtained value (141) differed by 0%. NB obtained value was rounded to 0 decimal places.&quot;</code></pre>
 <p>Let’s calculate the two accuracy measures:</p>
 <pre class="r"><code>accTraining &lt;- d %&gt;% 
   filter(phase == &quot;train&quot;) %&gt;% # training phase
@@ -450,6 +451,7 @@ compareValues(reportedValue = 3.25, obtainedValue = t.out$coefficients[['t.value
 <pre class="r"><code># compare p-value
 compareValues(reportedValue = 0.0014, obtainedValue = t.out$coefficients[['p.value']], isP = T)</code></pre>
 <pre><code>## [1] &quot;MAJOR NUMERICAL ERROR. The reported value (0.0014) and the obtained value (0.0027) differed by 92.86%. NB obtained value was rounded to 4 decimal places.&quot;</code></pre>
+<p>NB one of the the original authors has confirmed there is an issue here. Apparently the reported values were based on an old dataset. The values we obtain here are the correct values.</p>
 <blockquote>
 <p>…and overall accuracy (mean = 0.06, SE = 0.03, t(30) = 1.69, p = 0.050).</p>
 </blockquote>
@@ -477,6 +479,8 @@ compareValues(reportedValue = 1.69, obtainedValue = t.out$coefficients[['t.value
 <pre class="r"><code># compare p-value
 compareValues(reportedValue = .05, obtainedValue = t.out$coefficients[['p.value']], isP = T)</code></pre>
 <pre><code>## [1] &quot;DECISION ERROR and MAJOR NUMERICAL ERROR. The reported value (0.05) and the obtained value (0.04) differed by 20%. NB obtained value was rounded to 2 decimal places.&quot;</code></pre>
+<p>NB one of the the original authors has confirmed there is an issue here. Apparently the reported values were based on an old dataset. The values we obtain here are the correct values.</p>
+<p>Also NB - the authors actually interpret p = .05 as statistically significant. As the correct value is .04, this description is accurate, so we will not consider this a decision error.</p>
 </div>
 </div>
 <div id="step-5-conclusion" class="section level2">
@@ -485,8 +489,9 @@ compareValues(reportedValue = .05, obtainedValue = t.out$coefficients[['p.value'
           Article_ID = 'UYYED', 
           Insufficient_Information_Errors = 0,
           Decision_Errors = 0, 
-          Major_Numerical_Errors = 11, 
-          Minor_Numerical_Errors = 3)</code></pre>
+          Major_Numerical_Errors = 5, 
+          Minor_Numerical_Errors = 5,
+          Author_Assistance = T)</code></pre>
 <table>
 <thead>
 <tr class="header">
@@ -501,9 +506,9 @@ compareValues(reportedValue = .05, obtainedValue = t.out$coefficients[['p.value'
 <tr class="odd">
 <td align="right">0</td>
 <td align="right">0</td>
-<td align="right">11</td>
-<td align="right">3</td>
-<td align="left">Failure</td>
+<td align="right">5</td>
+<td align="right">5</td>
+<td align="left">Failure despite author assistance</td>
 </tr>
 </tbody>
 </table>
@@ -515,7 +520,7 @@ compareValues(reportedValue = .05, obtainedValue = t.out$coefficients[['p.value'
 ##  language (EN)                        
 ##  collate  en_US.UTF-8                 
 ##  tz       America/Los_Angeles         
-##  date     2017-05-17                  
+##  date     2017-05-24                  
 ## 
 ##  package      * version  date      
 ##  acepack        1.4.1    2016-10-29
