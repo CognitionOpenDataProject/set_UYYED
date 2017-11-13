@@ -9,8 +9,10 @@ output:
 #### Article ID: UYYED
 #### Pilot: Gustav Nilsonne
 #### Co-pilot: Tom Hardwicke
-#### Start date: 03/29/2017
-#### End date: 03/24/2017
+#### Start date: Mar 29 2017
+#### End date: Mar 24 2017
+#### Final verification: Tom Hardwicke
+#### Date: Nov 13 2017
 
 -------
 
@@ -28,6 +30,9 @@ For this article we will focus on the findings reported for Experiment 1 in sect
 
 ```{r global_options, include=FALSE}
 knitr::opts_chunk$set(echo=TRUE, warning=FALSE, message=FALSE)
+
+# prepare an empty report object, we will update this each time we run compareValues2()
+reportObject <- data.frame("Article_ID" = NA, "valuesChecked" = 0, "eyeballs" = 0, "Total_df" = 0, "Total_p" = 0, "Total_mean" = 0, "Total_sd" = 0, "Total_se" = 0, "Total_ci" = 0, "Total_bf" = 0, "Total_t" = 0, "Total_F" = 0, "Total_es" = 0, "Total_median" = 0, "Total_irr" = 0, "Total_r" = 0, "Total_z" = 0, "Total_coeff" = 0, "Total_n" = 0, "Total_x2" = 0, "Total_other" = 0, "Insufficient_Information_Errors" = 0, "Decision_Errors" = 0, "Major_Numerical_Errors" = 0, "Minor_Numerical_Errors" = 0, "Major_df" = 0, "Major_p" = 0, "Major_mean" = 0, "Major_sd" = 0, "Major_se" = 0, "Major_ci" = 0, "Major_bf" = 0, "Major_t" = 0, "Major_F" = 0, "Major_es" = 0, "Major_median" = 0, "Major_irr" = 0, "Major_r" = 0, "Major_z" = 0, "Major_coeff" = 0, "Major_n" = 0, "Major_x2" = 0, "Major_other" = 0, "affectsConclusion" = NA, "error_typo" = 0, "error_specification" = 0, "error_analysis" = 0, "error_data" = 0, "error_unidentified" = 0, "Author_Assistance" = NA, "resolved_typo" = 0, "resolved_specification" = 0, "resolved_analysis" = 0, "resolved_data" = 0, "correctionSuggested" = NA, "correctionPublished" = NA)
 ```
 
 ## Step 1: Load packages
@@ -71,7 +76,7 @@ a <- d %>%
   select(attempted)
 
 att_train <- length(a$attempted[a$attempted == 'yes'])/length(a$attempted)
-compareValues(reportedValue = 81, obtainedValue = att_train*100)
+reportObject <- compareValues2(reportedValue = "81", obtainedValue = att_train*100, valueType = 'n')
 ```
 
 > During the test phase, they showed at least one left or right look in 83% of the trials. 
@@ -83,7 +88,7 @@ a <- d %>%
   select(attempted)
 
 att_test <- length(a$attempted[a$attempted == 'yes'])/length(a$attempted)
-compareValues(reportedValue = 83, obtainedValue = att_test*100)
+reportObject <- compareValues2(reportedValue = "83", obtainedValue = att_test*100, valueType = 'n')
 ```
 
 > Trials that contained neither a left nor a right look were excluded from the analyses
@@ -104,7 +109,9 @@ trials <- d %>% group_by(subj) %>%
   summarise(n = n()) %>%
   summarise(mean(n), min(n), max(n))
 
-kable(trials)
+reportObject <- compareValues2(reportedValue = "14.9", obtainedValue = trials$`mean(n)`, valueType = 'mean')
+reportObject <- compareValues2(reportedValue = "4", obtainedValue = trials$`min(n)`, valueType = 'n')
+reportObject <- compareValues2(reportedValue = "27", obtainedValue = trials$`max(n)`, valueType = 'n')
 ```
 
 Very close, only the mean is very slightly off.
@@ -122,11 +129,11 @@ firstLookLatency <- d %>%
 kable(firstLookLatency)
 ```
 
-Looks like the values do not match, let's compare them explictly:
+Let's compare the values explictly:
 
 ```{r}
-compareValues(reportedValue = 625, obtainedValue = firstLookLatency$M)
-compareValues(reportedValue = 141, obtainedValue = firstLookLatency$SD)
+reportObject <- compareValues2(reportedValue = "625", obtainedValue = firstLookLatency$M, valueType = 'mean')
+reportObject <- compareValues2(reportedValue = "141", obtainedValue = firstLookLatency$SD, valueType = 'sd')
 ```
 
 Let's calculate the two accuracy measures:
@@ -166,20 +173,24 @@ For the training phase:
 
 ```{r}
 ## for initial accuracy
-compareValues(reportedValue = -0.02, obtainedValue = trainingStats$initial_M)
-compareValues(reportedValue = 0.03, obtainedValue = trainingStats$initial_SE)
-wtd.t.test(accTraining$initialAccScaled, weight = accTraining$n_obs, alternative = "greater")
-# eyeballing indicates that the df and t value are accurately reported.
+reportObject <- compareValues2(reportedValue = "-0.02", obtainedValue = trainingStats$initial_M, valueType = 'mean')
+reportObject <- compareValues2(reportedValue = "0.03", obtainedValue = trainingStats$initial_SE, valueType = 'se')
+
+t.out <- wtd.t.test(accTraining$initialAccScaled, weight = accTraining$n_obs, alternative = "greater")
+reportObject <- compareValues2(reportedValue = "30", obtainedValue = t.out$coefficients[2], valueType = 'df')
+reportObject <- compareValues2(reportedValue = "eyeballMATCH", obtainedValue = t.out$coefficients[1], valueType = 't')
 ```
 
 > or overall accuracy (mean = −0.002, SE = 0.03, t(30) < 1, ns). 
 
 ```{r}
 ## for overall accuracy
-compareValues(reportedValue = -0.002, obtainedValue = trainingStats$overall_M)
-compareValues(reportedValue = 0.03, obtainedValue = trainingStats$overall_SE)
-wtd.t.test(accTraining$overallAccScaled, weight = accTraining$n_obs, alternative = "greater")
-# eyeballing indicates that the df and t value are accurately reported.
+reportObject <- compareValues2(reportedValue = "-0.002", obtainedValue = trainingStats$overall_M, valueType = 'mean')
+reportObject <- compareValues2(reportedValue = "0.03", obtainedValue = trainingStats$overall_SE, valueType = 'se')
+
+t.out <- wtd.t.test(accTraining$overallAccScaled, weight = accTraining$n_obs, alternative = "greater")
+reportObject <- compareValues2(reportedValue = "30", obtainedValue = t.out$coefficients[2], valueType = 'df')
+reportObject <- compareValues2(reportedValue = "eyeballMATCH", obtainedValue = t.out$coefficients[1], valueType = 't')
 ```
 
 For the test phase: 
@@ -188,58 +199,92 @@ For the test phase:
 
 ```{r}
 ## for initial accuracy
-compareValues(reportedValue = 0.12, obtainedValue = testStats$initial_M)
-compareValues(reportedValue = 0.04, obtainedValue = testStats$initial_SE)
+reportObject <- compareValues2(reportedValue = "0.12", obtainedValue = testStats$initial_M, valueType = 'mean')
+reportObject <- compareValues2(reportedValue = "0.04", obtainedValue = testStats$initial_SE, valueType = 'se')
+
 t.out <- wtd.t.test(accTest$initialAccScaled, weight = accTest$n_obs, alternative = "greater")
-t.out
+reportObject <- compareValues2(reportedValue = "30", obtainedValue = t.out$coefficients[2], valueType = 'df')
+reportObject <- compareValues2(reportedValue = "3.25", obtainedValue = t.out$coefficients[1], valueType = 't')
+reportObject <- compareValues2(reportedValue = "0.0014", obtainedValue = t.out$coefficients[3], valueType = 'p')
 ```
 
-There seem to be some discrepancies with the t-test outcome, let's check them explicitly:
+There seem to be some discrepancies here.
 
-```{r}
-# compare t-value
-compareValues(reportedValue = 3.25, obtainedValue = t.out$coefficients[['t.value']])
-# compare p-value
-compareValues(reportedValue = 0.0014, obtainedValue = t.out$coefficients[['p.value']], isP = T)
-```
-
-NB one of the the original authors has confirmed there is an issue here. Apparently the reported values were based on an old dataset. The values we obtain here are the correct values.
+NB one of the the original authors has confirmed there is an issue here. Apparently the reported values were based on an old dataset. The values we obtained here are the correct values.
 
 > ...and overall accuracy (mean = 0.06, SE = 0.03, t(30) = 1.69, p = 0.050).
 
 ```{r}
 ## for overall accuracy
-compareValues(reportedValue = 0.06, obtainedValue = testStats$overall_M)
-compareValues(reportedValue = 0.03, obtainedValue = testStats$overall_SE)
+reportObject <- compareValues2(reportedValue = "0.06", obtainedValue = testStats$overall_M, valueType = 'mean')
+reportObject <- compareValues2(reportedValue = "0.03", obtainedValue = testStats$overall_SE, valueType = 'se')
+
 t.out <- wtd.t.test(accTest$overallAccScaled, weight = accTest$n_obs, alternative = "greater")
-t.out
+reportObject <- compareValues2(reportedValue = "30", obtainedValue = t.out$coefficients[2], valueType = 'df')
+reportObject <- compareValues2(reportedValue = "1.69", obtainedValue = t.out$coefficients[1], valueType = 't')
+
+# NB - the authors actually interpret p = .05 as statistically significant. As the correct value is .04, this description is accurate, so we will not consider this a decision error, only a major numerical error. We need to 'trick' the function a little here - we cannot enter 0.05 as it will record a decision error. We enter 0.049 instead - which still correctly records that there is a major numerical error.
+reportObject <- compareValues2(reportedValue = "0.049", obtainedValue = t.out$coefficients[3], valueType = 'p')
 ```
 
-There seem to be some discrepancies with the t-test outcome, let's check them explicitly:
-
-```{r}
-# compare t-value
-compareValues(reportedValue = 1.69, obtainedValue = t.out$coefficients[['t.value']])
-# compare p-value
-compareValues(reportedValue = .05, obtainedValue = t.out$coefficients[['p.value']], isP = T)
-```
+There seem to be some discrepancies here too.
 
 NB one of the the original authors has confirmed there is an issue here. Apparently the reported values were based on an old dataset. The values we obtain here are the correct values.
 
-Also NB - the authors actually interpret p = .05 as statistically significant. As the correct value is .04, this description is accurate, so we will not consider this a decision error.
-
 ## Step 5: Conclusion
 
+We encountered many reproducibility issues here. We contacted the original authors for assistance and were told that there were a large number of errors in the data file itself. These appeared to have been introduced during manual editing of the data file in order to make it more reader friendly. Additionally, when they checked their own analyses, the authors found that some of the values reported in the paper were based on a previous version of the data set and had not been updated. The author also provided some additional information about data aggregation which helped to resolve some errors.
+
 ```{r}
-codReport(Report_Type = 'joint',
-          Article_ID = 'UYYED', 
-          Insufficient_Information_Errors = 0,
-          Decision_Errors = 0, 
-          Major_Numerical_Errors = 5, 
-          Minor_Numerical_Errors = 5,
-          Author_Assistance = T)
+reportObject$Article_ID <- "UYYED"
+reportObject$affectsConclusion <- "no"
+reportObject$error_typo <- 0
+reportObject$error_specification <- 0
+reportObject$error_analysis <- 1
+reportObject$error_data <- 0
+reportObject$error_unidentified <- 0
+reportObject$Author_Assistance <- T
+reportObject$resolved_typo <- 0
+reportObject$resolved_specification <- 1
+reportObject$resolved_analysis <- 0
+reportObject$resolved_data <- 1
+reportObject$correctionSuggested <- "yes"
+reportObject$correctionPublished <- T
+
+# decide on final outcome
+if(reportObject$Decision_Errors > 0 | reportObject$Major_Numerical_Errors > 0 | reportObject$Insufficient_Information_Errors > 0){
+  reportObject$finalOutcome <- "Failure"
+  if(reportObject$Author_Assistance == T){
+    reportObject$finalOutcome <- "Failure despite author assistance"
+  }
+}else{
+  reportObject$finalOutcome <- "Success"
+  if(reportObject$Author_Assistance == T){
+    reportObject$finalOutcome <- "Success with author assistance"
+  }
+}
+
+# save the report object
+filename <- paste0("reportObject_", reportObject$Article_ID,".csv")
+write_csv(reportObject, filename)
 ```
 
+## Report Object
+
+```{r, echo = FALSE}
+# display report object in chunks
+kable(reportObject[2:10], align = 'l')
+kable(reportObject[11:20], align = 'l')
+kable(reportObject[21:25], align = 'l')
+kable(reportObject[26:30], align = 'l')
+kable(reportObject[31:35], align = 'l')
+kable(reportObject[36:40], align = 'l')
+kable(reportObject[41:45], align = 'l')
+kable(reportObject[46:51], align = 'l')
+kable(reportObject[52:57], align = 'l')
+```
+
+## Session information
 
 ```{r session_info, include=TRUE, echo=TRUE, results='markup'}
 devtools::session_info()
